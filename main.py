@@ -9,7 +9,8 @@ from utils import (
     load_user_settings,
     save_user_settings,
     parse_prospecting_output,
-    extract_email_address
+    extract_email_address,
+    leads_to_dataframe
 )
 from tools.email_tool import (
     EMAIL_PROVIDERS,
@@ -124,15 +125,24 @@ with tab_prospect:
             niche_input = "Agencias de desarrollo web y marketing en Barcelona"
 
     with col_tone:
-        tone_options = (
-            "Directo hacia el ROI y Profesional",
-            "Desenfadado y Cercano",
-            "Curioso y Provocativo",
-            "Formal y Corporativo"
-        )
-        current_tone = st.session_state.settings.get("default_tone", tone_options[0])
-        tone_index = tone_options.index(current_tone) if current_tone in tone_options else 0
-        tone = st.selectbox("Tono de los emails", tone_options, index=tone_index)
+        col_t1, col_t2 = st.columns([1, 1])
+        with col_t1:
+            tone_options = (
+                "Directo hacia el ROI y Profesional",
+                "Desenfadado y Cercano",
+                "Curioso y Provocativo",
+                "Formal y Corporativo"
+            )
+            current_tone = st.session_state.settings.get("default_tone", tone_options[0])
+            tone_index = tone_options.index(current_tone) if current_tone in tone_options else 0
+            tone = st.selectbox("Tono del email", tone_options, index=tone_index)
+        with col_t2:
+            leads_count = st.selectbox(
+                "Nº de Prospectos",
+                [3, 5, 8, 10],
+                index=0,
+                help="Número de empresas reales que los agentes buscarán e investigarán."
+            )
 
     value_prop = st.text_area(
         "¿Cuál es tu Propuesta de Valor? (¿Qué vendes y qué problema resuelves?)",
@@ -160,9 +170,9 @@ with tab_prospect:
             if env_var:
                 os.environ[env_var] = api_key
 
-            st.info(f"🤖 **Tripulación activada con {active_ai_provider} ({model_name}).** Investigando internet, analizando empresas y redactando emails personalizados...")
+            st.info(f"🤖 **Tripulación activada con {active_ai_provider} ({model_name}).** Investigando {leads_count} prospectos...")
             
-            with st.spinner("Los agentes están buscando empresas, extrayendo datos web, analizando competidores y creando la estrategia..."):
+            with st.spinner(f"Los agentes están buscando {leads_count} empresas, extrayendo datos web y redactando emails..."):
                 try:
                     from orchestrator import SDRCrew
                     
@@ -170,6 +180,7 @@ with tab_prospect:
                         niche=niche_input,
                         value_proposition=value_prop,
                         tone=tone,
+                        leads_count=leads_count,
                         ai_model=model_name,
                         api_key=api_key,
                         ai_base_url=base_url if base_url else None
@@ -198,7 +209,24 @@ with tab_leads:
         st.info("Aún no has ejecutado ninguna prospección en esta sesión. Completa los datos en la pestaña '🚀 1. Nueva Prospección' o abre un reporte desde '📜 4. Historial Guardado'.")
     else:
         leads = st.session_state.current_leads
-        st.write(f"Se han identificado **{len(leads)} prospecto(s)** listos para contactar:")
+        
+        # Barra superior con estadísticas y botón de descarga en Excel / CSV
+        df_leads = leads_to_dataframe(leads)
+        csv_data = df_leads.to_csv(index=False, sep=";", encoding="utf-8-sig")
+        
+        col_hdr_info, col_hdr_dl = st.columns([2, 1])
+        with col_hdr_info:
+            emails_found = sum(1 for l in leads if l.get("email_destinatario"))
+            st.markdown(f"Se han identificado **{len(leads)} prospectos** ({emails_found} con email detectado):")
+        with col_hdr_dl:
+            st.download_button(
+                label="📊 Descargar Leads en Excel (.csv)",
+                data=csv_data,
+                file_name=f"leads_prospecta_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                type="secondary",
+                use_container_width=True
+            )
 
         email_user = st.session_state.settings.get("email_user", "")
         email_ready = bool(email_user and st.session_state.settings.get("email_password"))
@@ -254,7 +282,9 @@ with tab_leads:
                                     "user": st.session_state.settings.get("email_user", ""),
                                     "password": st.session_state.settings.get("email_password", ""),
                                     "use_tls": st.session_state.settings.get("smtp_tls", True),
-                                    "sender_name": st.session_state.settings.get("email_sender_name", "")
+                                    "sender_name": st.session_state.settings.get("email_sender_name", ""),
+                                    "signature": st.session_state.settings.get("email_signature", ""),
+                                    "bcc_self": st.session_state.settings.get("email_bcc_self", False)
                                 }
                                 success, msg = send_email_smtp(
                                     to_email=recipient_email,
@@ -372,6 +402,19 @@ with tab_config:
             help="Para Gmail/Yahoo usa una Contraseña de Aplicación de 16 caracteres."
         )
 
+        cfg_signature = st.text_area(
+            "Firma del Correo (Se añadirá automáticamente al final de tus emails):",
+            value=st.session_state.settings.get("email_signature", ""),
+            placeholder="Ej:\nUn saludo,\nCarlos Gómez | Asesor Comercial\nTel: +34 600 00 00 00\ncalendly.com/miempresa",
+            height=90
+        )
+
+        cfg_bcc_self = st.checkbox(
+            "Enviarme una copia oculta (BCC) a mi propio correo de cada email enviado",
+            value=st.session_state.settings.get("email_bcc_self", False),
+            help="Ideal para tener constancia en tu bandeja de entrada de los correos que envías a prospectos."
+        )
+
         if cfg_provider == "Gmail":
             with st.expander("🔒 ¿Cómo crear una Contraseña de Aplicación en Gmail?"):
                 st.markdown("""
@@ -420,6 +463,8 @@ with tab_config:
             "email_user": cfg_email_user.strip(),
             "email_password": cfg_email_pass.strip(),
             "email_sender_name": cfg_sender_name.strip(),
+            "email_signature": cfg_signature.strip(),
+            "email_bcc_self": cfg_bcc_self,
             "smtp_host": cfg_smtp_host,
             "smtp_port": int(cfg_smtp_port),
             "smtp_tls": cfg_smtp_tls,

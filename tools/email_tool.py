@@ -49,6 +49,8 @@ def send_email_smtp(
     password = smtp_config.get("password", "").strip()
     use_tls = smtp_config.get("use_tls", True)
     sender_name = smtp_config.get("sender_name", "").strip()
+    signature = smtp_config.get("signature", "").strip()
+    bcc_self = smtp_config.get("bcc_self", False)
 
     if not host or not user or not password:
         return False, "Faltan credenciales del servidor de correo (servidor, usuario o contraseña)."
@@ -62,15 +64,24 @@ def send_email_smtp(
         msg["From"] = f"{sender_name} <{user}>" if sender_name else user
         msg["To"] = to_email
 
+        # Adjuntar firma si existe
+        full_body = body
+        if signature:
+            full_body = f"{body}\n\n--\n{signature}"
+
         # Adjuntar cuerpo (texto plano o html)
         subtype = "html" if is_html else "plain"
-        msg.attach(MIMEText(body, subtype, "utf-8"))
+        msg.attach(MIMEText(full_body, subtype, "utf-8"))
+
+        recipients = [to_email]
+        if bcc_self and user and user not in recipients:
+            recipients.append(user)
 
         if port == 465:
             # Conexión SSL directa
             with smtplib.SMTP_SSL(host, port, timeout=15) as server:
                 server.login(user, password)
-                server.sendmail(user, [to_email], msg.as_string())
+                server.sendmail(user, recipients, msg.as_string())
         else:
             # Conexión STARTTLS (puerto 587 común)
             with smtplib.SMTP(host, port, timeout=15) as server:
@@ -79,7 +90,7 @@ def send_email_smtp(
                     server.starttls()
                     server.ehlo()
                 server.login(user, password)
-                server.sendmail(user, [to_email], msg.as_string())
+                server.sendmail(user, recipients, msg.as_string())
 
         return True, f"Correo enviado exitosamente a {to_email}"
     except smtplib.SMTPAuthenticationError:

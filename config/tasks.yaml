@@ -1,9 +1,9 @@
 find_leads_task:
   description: >
-    Utiliza tus herramientas de búsqueda para encontrar 3 empresas reales que pertenezcan
-    al nicho especificado: {niche}. No te detengas en la primera, queremos una pequeña lista.
+    Utiliza tus herramientas de búsqueda para encontrar exactamente {leads_count} empresas reales y diferentes que pertenezcan
+    al nicho especificado: {niche}. Asegúrate de extraer el nombre comercial y el dominio web oficial de cada una.
   expected_output: >
-    Un listado de 3 empresas con su nombre y dominio web.
+    Un listado de {leads_count} empresas con su nombre y dominio web.
 
 research_company_task:
   description: >

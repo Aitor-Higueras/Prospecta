@@ -106,6 +106,8 @@ DEFAULT_SETTINGS = {
     "email_user": "",
     "email_password": "",
     "email_sender_name": "",
+    "email_signature": "",
+    "email_bcc_self": False,
     "smtp_host": "smtp.gmail.com",
     "smtp_port": 587,
     "smtp_tls": True,
@@ -218,3 +220,20 @@ def parse_prospecting_output(raw_text: str) -> List[Dict[str, Any]]:
         })
 
     return leads
+
+def leads_to_dataframe(leads: List[Dict[str, Any]]):
+    """Convierte la lista de prospectos en un DataFrame de pandas para exportar a Excel o CSV."""
+    import pandas as pd
+    
+    rows = []
+    for i, lead in enumerate(leads):
+        rows.append({
+            "Nº": i + 1,
+            "Empresa": lead.get("empresa", ""),
+            "Email Destinatario": lead.get("email_destinatario", ""),
+            "Contacto / Teléfono": lead.get("contacto", ""),
+            "Dirección": lead.get("direccion", ""),
+            "Asunto del Email": lead.get("asunto", ""),
+            "Cuerpo del Mensaje": lead.get("cuerpo", "")
+        })
+    return pd.DataFrame(rows)
