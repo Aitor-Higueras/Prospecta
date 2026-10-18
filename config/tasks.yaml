@@ -26,24 +26,37 @@ qualify_lead_task:
 
 strategize_pitch_task:
   description: >
-    Para cada lead CALIFICADO, diseña el ángulo de venta usando {value_proposition} y comparándolos
-    sutilmente con el competidor identificado para generar urgencia.
+    Para cada lead CALIFICADO, diseña el ángulo estratégico ideal usando {value_proposition}.
+    Identifica su dolor principal:
+    - ¿Tienen muchas fincas y poco tiempo? Enfócate en presupuestos en 24h listos para presentar en juntas.
+    - ¿Problemas de absentismo? Enfócate en la garantía de suplencia en menos de 2 horas.
+    - ¿Exigencia de calidad? Enfócate en supervisión mensual con fotos de control.
   expected_output: >
-    Estrategia de ataque para cada lead.
+    Estrategia de ataque comercial y argumento de diferenciación para cada lead.
 
 write_email_task:
   description: >
-    Redacta un email hiper-personalizado para cada lead calificado. 
+    Redacta un correo electrónico en frío ultra-personalizado y de alta conversión para cada lead calificado.
     Usa el tono: {tone}.
+
+    ESTRICTAS REGLAS DE COPYWRITING B2B (ANTI-SPAM Y MÁXIMA RESPUESTA):
+    1. EXTENSIÓN: Muy breve, entre 80 y 115 palabras en total. Párrafos de 1 o 2 líneas para leerse en móvil en 30 segundos.
+    2. PROHIBIDO USAR CLICHÉS: NUNCA uses 'Espero que este correo te encuentre bien', 'Me pongo en contacto para...', 'En el dinámico mundo...', ni 'Somos líderes con amplia experiencia'. Suenan a spam instantáneo.
+    3. GANCHO DIRECTO: Ve al grano desde la primera palabra. Reconoce que gestionar comunidades en su zona y lidiar con quejas de vecinos por mala limpieza o bajas de personal sin cubrir es una pesadilla habitual para el administrador.
+    4. PROPUESTA CONCRETA ({value_proposition}): Destaca la sustitución inmediata ante bajas en menos de 2h, supervisión con fotos y presupuesto en 24h para sus juntas de propietarios.
+    5. CERO PRESIÓN: Deja claro que no pretendes que cambien de proveedor en todas sus fincas de golpe, sino ser una alternativa fiable cuando alguna comunidad les dé problemas o quieran comparar costes.
+    6. LLAMADA A LA ACCIÓN (CTA) DE BAJA FRICCIÓN: Haz una pregunta fácil de responder con un simple 'Sí' o 'No'. Ejemplo: '¿Tenéis ahora mismo alguna comunidad donde os interese comparar presupuesto para la próxima junta?'
+    7. ASUNTO: Muy natural y corto (3 a 5 palabras, estilo humano sin mayúsculas exageradas). Ejemplos: 'limpieza de comunidades en {niche}', '¿quejas de limpieza en alguna finca?', 'presupuesto comparativo para [Nombre de la Empresa]'.
+
     Formato requerido para CADA LEAD:
     ---
     FICHA DEL LEAD:
     - Empresa: [Nombre]
-    - Dirección: [Calle]
+    - Dirección: [Calle, Ciudad]
     - Contacto: [Email / Teléfono]
     ---
     Email:
-    Asunto: [Creativo]
-    Cuerpo: [Contenido directo conectando con {value_proposition}]
+    Asunto: [Asunto corto y natural]
+    Cuerpo: [Texto conciso de 80 a 115 palabras dividido en párrafos cortos]
   expected_output: >
-    El documento final con todos los emails y sus fichas correspondientes.
+    El documento final con todos los emails optimizados y sus fichas correspondientes.
