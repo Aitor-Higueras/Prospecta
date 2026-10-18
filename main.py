@@ -14,6 +14,7 @@ from utils import (
     leads_to_dataframe,
     load_contacted_leads,
     save_contacted_lead,
+    update_lead_status_and_notes,
     remove_contacted_lead,
     is_lead_already_contacted,
     get_maps_search_url,
@@ -374,7 +375,8 @@ with tab_leads:
                                         empresa=empresa,
                                         email=recipient_email,
                                         asunto=email_subject,
-                                        nicho=current_niche
+                                        nicho=current_niche,
+                                        gsheets_url=st.session_state.settings.get("gsheets_url", "")
                                     )
                                     st.session_state.contacted_leads = load_contacted_leads()
                                     st.session_state.sent_logs.append({
@@ -428,6 +430,38 @@ with tab_contacted:
         st.dataframe(df_contacted, use_container_width=True)
 
         st.markdown("---")
+        # Editor de notas y estado comercial
+        with st.expander("📝 Añadir Notas de Seguimiento y Cambiar Estado Comercial", expanded=True):
+            st.caption("Usa este cuaderno para apuntar detalles de tus llamadas o reuniones con los administradores.")
+            edit_options = [f"{c.get('empresa')} ({c.get('email')})" for c in contacted]
+            selected_edit = st.selectbox("Selecciona la administración a actualizar:", edit_options, key="edit_lead_sel")
+            edit_idx = edit_options.index(selected_edit)
+            target_lead = contacted[edit_idx]
+
+            col_st1, col_st2 = st.columns([1, 2])
+            with col_st1:
+                status_choices = [
+                    "🟡 Enviado",
+                    "🔵 Ha respondido / Pide presupuesto",
+                    "🟠 Visita presencial agendada",
+                    "🟢 ¡Comunidad Ganada! 🎉",
+                    "⚪ No le interesa ahora"
+                ]
+                current_st = target_lead.get("estado", "🟡 Enviado")
+                st_idx = status_choices.index(current_st) if current_st in status_choices else 0
+                new_st = st.selectbox("Estado Comercial:", status_choices, index=st_idx, key="status_sel")
+            
+            with col_st2:
+                current_notes = target_lead.get("notas", "")
+                new_notes = st.text_area("Notas privadas (ej: Hablado con Juan, tienen junta en noviembre para 2 fincas):", value=current_notes, height=80, key="notes_area")
+
+            if st.button("💾 Guardar Notas y Estado", type="primary", key="save_notes_btn"):
+                gs_url = st.session_state.settings.get("gsheets_url", "")
+                if update_lead_status_and_notes(target_lead.get("email"), target_lead.get("empresa"), new_st, new_notes, gs_url):
+                    st.session_state.contacted_leads = load_contacted_leads()
+                    st.success(f"✅ Notas actualizadas para {target_lead.get('empresa')}.")
+                    st.rerun()
+
         with st.expander("🗑️ Desbloquear una empresa (Permitir volver a contactarla)"):
             st.caption("Si eliminas una empresa de esta lista, los agentes podrán volver a encontrarla e investigarla.")
             del_options = [f"{c.get('empresa')} ({c.get('email')})" for c in contacted]
@@ -577,6 +611,35 @@ with tab_config:
                         st.error(f"❌ {msg}")
 
     st.markdown("---")
+    st.markdown("### ☁️ Base de Datos en Google Sheets (Opcional)")
+    cfg_gsheets = st.text_input(
+        "URL de tu Google Sheet (Web App URL):",
+        value=st.session_state.settings.get("gsheets_url", ""),
+        placeholder="https://script.google.com/macros/s/.../exec",
+        help="Sincroniza todos tus prospectos, notas y estados con una hoja de cálculo privada en tu Google Drive."
+    )
+    with st.expander("❓ ¿Cómo conectar tu Google Sheet en 2 minutos? (Para tenerlo en tu móvil)"):
+        st.markdown("""
+        Conectar una hoja de Google Drive te permite ver y editar tus notas comerciales desde la app de Google Sheets en tu teléfono:
+        1. Abre una hoja de cálculo en blanco en: **[sheets.new](https://sheets.new)**.
+        2. En el menú superior ve a **Extensiones -> Apps Script**.
+        3. Borra lo que haya y pega este código:
+        ```javascript
+        function doPost(e) {
+          var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+          var data = JSON.parse(e.postData.contents);
+          if (sheet.getLastRow() === 0) {
+            sheet.appendRow(["Fecha", "Empresa", "Email", "Asunto", "Nicho", "Estado", "Notas"]);
+          }
+          sheet.appendRow([data.fecha, data.empresa, data.email, data.asunto, data.nicho, data.estado || "Enviado", data.notas || ""]);
+          return ContentService.createTextOutput(JSON.stringify({"status": "ok"})).setMimeType(ContentService.MimeType.JSON);
+        }
+        ```
+        4. Pulsa **Implementar -> Nueva implementación -> Tipo: Aplicación web** (En *'Quién tiene acceso'* selecciona: *Cualquiera*).
+        5. Copia la URL que te da (termina en `/exec`), pégala en esta casilla y pulsa **Guardar**.
+        """)
+
+    st.markdown("---")
     if st.button("💾 Guardar Toda la Configuración", type="primary", use_container_width=True):
         new_settings = {
             "ai_provider": selected_ai_provider,
@@ -592,6 +655,7 @@ with tab_config:
             "smtp_host": cfg_smtp_host,
             "smtp_port": int(cfg_smtp_port),
             "smtp_tls": cfg_smtp_tls,
+            "gsheets_url": cfg_gsheets.strip(),
             "default_value_prop": cfg_default_vp.strip()
         }
         st.session_state.settings.update(new_settings)

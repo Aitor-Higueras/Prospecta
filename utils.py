@@ -115,6 +115,8 @@ DEFAULT_SETTINGS = {
     "smtp_host": "smtp.gmail.com",
     "smtp_port": 587,
     "smtp_tls": True,
+    # Base de Datos Cloud (Google Sheets)
+    "gsheets_url": "",
     # Textos
     "default_value_prop": "Servicio profesional de limpieza y mantenimiento para comunidades de propietarios y garajes. Garantizamos sustitución inmediata en menos de 2h ante bajas, supervisión periódica con fotos y presupuestos cerrados en 24h para tus juntas de vecinos.",
     "default_tone": "Directo hacia el ROI y Profesional"
@@ -254,8 +256,28 @@ def load_contacted_leads() -> List[Dict[str, Any]]:
             return []
     return []
 
-def save_contacted_lead(empresa: str, email: str, asunto: str = "", nicho: str = "") -> bool:
-    """Registra de forma persistente un lead al que se le ha enviado un correo."""
+def sync_lead_to_gsheets(data_dict: Dict[str, Any], gsheets_url: str) -> bool:
+    """Envía un registro a Google Sheets mediante la URL de Google Apps Script."""
+    if not gsheets_url or not gsheets_url.startswith("http"):
+        return False
+    try:
+        import requests
+        requests.post(gsheets_url, json=data_dict, timeout=5)
+        return True
+    except Exception as e:
+        print(f"Error sincronizando con Google Sheets: {e}")
+        return False
+
+def save_contacted_lead(
+    empresa: str,
+    email: str,
+    asunto: str = "",
+    nicho: str = "",
+    estado: str = "Enviado",
+    notas: str = "",
+    gsheets_url: str = ""
+) -> bool:
+    """Registra de forma persistente un lead (en local y en Google Sheets si está configurado)."""
     try:
         leads = load_contacted_leads()
         new_entry = {
@@ -263,6 +285,8 @@ def save_contacted_lead(empresa: str, email: str, asunto: str = "", nicho: str =
             "email": email.strip().lower(),
             "asunto": asunto.strip(),
             "nicho": nicho.strip(),
+            "estado": estado.strip() if estado else "Enviado",
+            "notas": notas.strip() if notas else "",
             "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         # Evitar duplicados en el registro
@@ -270,9 +294,37 @@ def save_contacted_lead(empresa: str, email: str, asunto: str = "", nicho: str =
         leads.insert(0, new_entry)
         with open(CONTACTED_FILE, "w", encoding="utf-8") as f:
             json.dump(leads, f, indent=4, ensure_ascii=False)
+            
+        # Sincronizar en tiempo real con Google Sheets si existe URL
+        if gsheets_url:
+            sync_lead_to_gsheets(new_entry, gsheets_url)
+            
         return True
     except Exception as e:
         print(f"Error guardando contacted_lead: {e}")
+        return False
+
+def update_lead_status_and_notes(email: str, empresa: str, nuevo_estado: str, nuevas_notas: str, gsheets_url: str = "") -> bool:
+    """Actualiza las notas o el estado comercial de una empresa."""
+    try:
+        leads = load_contacted_leads()
+        updated = False
+        target_entry = None
+        for l in leads:
+            if l.get("email") == email and l.get("empresa") == empresa:
+                l["estado"] = nuevo_estado
+                l["notas"] = nuevas_notas
+                updated = True
+                target_entry = l.copy()
+                break
+        if updated:
+            with open(CONTACTED_FILE, "w", encoding="utf-8") as f:
+                json.dump(leads, f, indent=4, ensure_ascii=False)
+            if gsheets_url and target_entry:
+                sync_lead_to_gsheets(target_entry, gsheets_url)
+        return updated
+    except Exception as e:
+        print(f"Error actualizando notas del lead: {e}")
         return False
 
 def remove_contacted_lead(email: str, empresa: str) -> bool:
