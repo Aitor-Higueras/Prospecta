@@ -5,9 +5,103 @@ from typing import Dict, Any, List
 
 SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_settings.json")
 
+# Lista completa de proveedores de IA compatibles vía CrewAI / LiteLLM
+AI_PROVIDERS = {
+    "Google Gemini (Recomendado / Gratis)": {
+        "prefix": "gemini",
+        "default_model": "gemini/gemini-2.5-flash",
+        "models": [
+            "gemini/gemini-2.5-flash",
+            "gemini/gemini-1.5-flash",
+            "gemini/gemini-2.0-flash",
+            "gemini/gemini-1.5-pro"
+        ],
+        "env_var": "GOOGLE_API_KEY",
+        "key_url": "https://aistudio.google.com/app/apikey",
+        "free_tier": True,
+        "note": "Totalmente gratis con tu cuenta de Google en AI Studio. Muy rápido y sin tarjeta de crédito."
+    },
+    "OpenAI (ChatGPT)": {
+        "prefix": "openai",
+        "default_model": "openai/gpt-4o-mini",
+        "models": [
+            "openai/gpt-4o-mini",
+            "openai/gpt-4o",
+            "openai/o3-mini"
+        ],
+        "env_var": "OPENAI_API_KEY",
+        "key_url": "https://platform.openai.com/api-keys",
+        "free_tier": False,
+        "note": "Usa tu cuenta de desarrollador de OpenAI. gpt-4o-mini es ultra rápido y cuesta fracciones de céntimo."
+    },
+    "DeepSeek": {
+        "prefix": "deepseek",
+        "default_model": "deepseek/deepseek-chat",
+        "models": [
+            "deepseek/deepseek-chat",
+            "deepseek/deepseek-reasoner"
+        ],
+        "env_var": "DEEPSEEK_API_KEY",
+        "key_url": "https://platform.deepseek.com/api_keys",
+        "free_tier": False,
+        "note": "Excelente calidad de razonamiento y redacción comercial a uno de los precios más bajos del mercado."
+    },
+    "Anthropic (Claude)": {
+        "prefix": "anthropic",
+        "default_model": "anthropic/claude-3-5-haiku-20241022",
+        "models": [
+            "anthropic/claude-3-5-haiku-20241022",
+            "anthropic/claude-3-5-sonnet-20241022"
+        ],
+        "env_var": "ANTHROPIC_API_KEY",
+        "key_url": "https://console.anthropic.com/settings/keys",
+        "free_tier": False,
+        "note": "Claude es el rey de la redacción humana de emails sin sonar a robot."
+    },
+    "Groq (Llama ultra rápida)": {
+        "prefix": "groq",
+        "default_model": "groq/llama-3.3-70b-versatile",
+        "models": [
+            "groq/llama-3.3-70b-versatile",
+            "groq/llama-3.1-8b-instant"
+        ],
+        "env_var": "GROQ_API_KEY",
+        "key_url": "https://console.groq.com/keys",
+        "free_tier": True,
+        "note": "Velocidad extrema de procesamiento (más de 300 tokens/segundo). Incluye plan gratuito."
+    },
+    "Mistral AI": {
+        "prefix": "mistral",
+        "default_model": "mistral/mistral-small-latest",
+        "models": [
+            "mistral/mistral-small-latest",
+            "mistral/mistral-large-latest"
+        ],
+        "env_var": "MISTRAL_API_KEY",
+        "key_url": "https://console.mistral.ai/api-keys",
+        "free_tier": False,
+        "note": "Modelo europeo con excelente rendimiento y privacidad."
+    },
+    "Personalizado (Ollama / Proxy / Otro)": {
+        "prefix": "custom",
+        "default_model": "ollama/llama3",
+        "models": ["ollama/llama3", "custom"],
+        "env_var": "CUSTOM_API_KEY",
+        "key_url": "",
+        "free_tier": True,
+        "note": "Configura cualquier modelo compatible con LiteLLM y tu propia URL de servidor."
+    }
+}
+
 DEFAULT_SETTINGS = {
+    "ai_provider": "Google Gemini (Recomendado / Gratis)",
+    "ai_model": "gemini/gemini-2.5-flash",
+    "ai_api_key": "",
+    "ai_base_url": "",
+    # Compatibilidad previa
     "google_api_key": "",
     "groq_api_key": "",
+    # Correo
     "email_provider": "Gmail",
     "email_user": "",
     "email_password": "",
@@ -15,6 +109,7 @@ DEFAULT_SETTINGS = {
     "smtp_host": "smtp.gmail.com",
     "smtp_port": 587,
     "smtp_tls": True,
+    # Textos
     "default_value_prop": "Automatizamos procesos y prospección comercial con Inteligencia Artificial.",
     "default_tone": "Directo hacia el ROI y Profesional"
 }
@@ -27,6 +122,9 @@ def load_user_settings() -> Dict[str, Any]:
                 saved = json.load(f)
                 settings = DEFAULT_SETTINGS.copy()
                 settings.update(saved)
+                # Migración: si tenía google_api_key pero no ai_api_key
+                if not settings.get("ai_api_key") and settings.get("google_api_key"):
+                    settings["ai_api_key"] = settings["google_api_key"]
                 return settings
         except Exception:
             pass
@@ -60,17 +158,13 @@ def parse_prospecting_output(raw_text: str) -> List[Dict[str, Any]]:
         return []
 
     leads = []
-    # Dividir por bloques de 'FICHA DEL LEAD' o separadores '---'
-    # Intentamos separar por 'FICHA DEL LEAD'
     sections = re.split(r'(?i)(?:---+|\bFICHA DEL LEAD\b)', raw_text)
     
-    current_block = ""
     for sec in sections:
         sec = sec.strip()
         if not sec:
             continue
         
-        # Si contiene 'Asunto:' o 'Email:', probablemente es un lead
         if "asunto:" in sec.lower() or "empresa:" in sec.lower():
             lead_info = {
                 "empresa": "Prospecto",
@@ -82,12 +176,10 @@ def parse_prospecting_output(raw_text: str) -> List[Dict[str, Any]]:
                 "raw": sec
             }
             
-            # Buscar Empresa
             emp_match = re.search(r'(?i)(?:Empresa|Nombre)[:\s]+([^\n\r]+)', sec)
             if emp_match:
                 lead_info["empresa"] = emp_match.group(1).strip(" -*#[]")
                 
-            # Buscar Contacto o Email
             cont_match = re.search(r'(?i)(?:Contacto|Email|Correo)[:\s]+([^\n\r]+)', sec)
             if cont_match:
                 lead_info["contacto"] = cont_match.group(1).strip(" -*#[]")
@@ -95,32 +187,25 @@ def parse_prospecting_output(raw_text: str) -> List[Dict[str, Any]]:
                 if found_email:
                     lead_info["email_destinatario"] = found_email
             
-            # Si no encontró email en contacto, buscar en todo el bloque
             if not lead_info["email_destinatario"]:
                 lead_info["email_destinatario"] = extract_email_address(sec)
 
-            # Buscar Asunto
             asunto_match = re.search(r'(?i)(?:Asunto|Subject)[:\s]+([^\n\r]+)', sec)
             if asunto_match:
                 lead_info["asunto"] = asunto_match.group(1).strip(" -*#[]")
 
-            # Buscar Cuerpo
             cuerpo_match = re.search(r'(?i)(?:Cuerpo|Body)[:\s]+([\s\S]+)', sec)
             if cuerpo_match:
                 lead_info["cuerpo"] = cuerpo_match.group(1).strip()
             else:
-                # Si no tiene etiqueta 'Cuerpo:', tomamos el texto posterior al asunto
                 if asunto_match:
                     lead_info["cuerpo"] = sec[asunto_match.end():].strip()
                 else:
                     lead_info["cuerpo"] = sec
 
-            # Limpiar posibles delimitadores markdown del cuerpo
             lead_info["cuerpo"] = re.sub(r'^(?:Email:|---|\n)+', '', lead_info["cuerpo"]).strip()
-
             leads.append(lead_info)
 
-    # Si el regex no encontró bloques estructurados, devolver 1 lead con el contenido completo
     if not leads and raw_text.strip():
         leads.append({
             "empresa": "Lead Prospectado",

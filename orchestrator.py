@@ -12,31 +12,56 @@ from tools.scraper_tool import scrape_website
 load_dotenv()
 
 class SDRCrew:
-    def __init__(self, niche: str, value_proposition: str, tone: str):
+    def __init__(
+        self,
+        niche: str,
+        value_proposition: str,
+        tone: str,
+        ai_model: str = None,
+        api_key: str = None,
+        ai_base_url: str = None
+    ):
         self.niche = niche
         self.value_proposition = value_proposition
         self.tone = tone
 
-        # LLM Base: Google Gemini 3.1 Flash Lite Preview (Lo más nuevo de 2026)
-        self.gemini_llm = LLM(
-            model="gemini/gemini-3.1-flash-lite-preview",
-            temperature=0.2,
-            api_key=os.environ.get("GOOGLE_API_KEY", "")
-        )
+        # Determinar modelo (por defecto Gemini 2.5 Flash)
+        self.model = ai_model or os.environ.get("AI_MODEL", "gemini/gemini-2.5-flash")
+        
+        # Determinar API Key con fallbacks inteligentes según el prefijo del modelo
+        self.api_key = api_key
+        if not self.api_key:
+            if "gemini" in self.model:
+                self.api_key = os.environ.get("GOOGLE_API_KEY", "")
+            elif "openai" in self.model or "gpt" in self.model:
+                self.api_key = os.environ.get("OPENAI_API_KEY", "")
+            elif "claude" in self.model or "anthropic" in self.model:
+                self.api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+            elif "deepseek" in self.model:
+                self.api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+            elif "groq" in self.model:
+                self.api_key = os.environ.get("GROQ_API_KEY", "")
+            elif "mistral" in self.model:
+                self.api_key = os.environ.get("MISTRAL_API_KEY", "")
+            else:
+                self.api_key = os.environ.get("AI_API_KEY", "")
 
-        # LLM Secundario: Llama 3.1 por Groq
-        groq_api_key = os.environ.get("GROQ_API_KEY", "")
-        if groq_api_key and groq_api_key != "your_groq_api_key_here" and groq_api_key != "":
-            try:
-                self.copy_llm = LLM(
-                    model="groq/llama-3.1-70b-versatile",
-                    temperature=0.7, 
-                    api_key=groq_api_key
-                )
-            except Exception:
-                self.copy_llm = self.gemini_llm
-        else:
-            self.copy_llm = self.gemini_llm
+        # Configurar LLM principal (análisis y búsqueda)
+        llm_kwargs = {
+            "model": self.model,
+            "temperature": 0.2
+        }
+        if self.api_key:
+            llm_kwargs["api_key"] = self.api_key
+        if ai_base_url:
+            llm_kwargs["base_url"] = ai_base_url
+
+        self.main_llm = LLM(**llm_kwargs)
+
+        # Configurar LLM para redacción de copy (temperatura más alta para mayor creatividad)
+        copy_kwargs = llm_kwargs.copy()
+        copy_kwargs["temperature"] = 0.6
+        self.copy_llm = LLM(**copy_kwargs)
 
     def run(self):
         # 1. Cargar la configuración de Agentes y Tareas desde YAML
@@ -52,7 +77,7 @@ class SDRCrew:
         lead_finder = Agent(
             config=agents_config['lead_finder'],
             tools=[search_internet],
-            llm=self.gemini_llm,
+            llm=self.main_llm,
             verbose=True,
             allow_delegation=False
         )
@@ -60,21 +85,21 @@ class SDRCrew:
         website_researcher = Agent(
             config=agents_config['website_researcher'],
             tools=[scrape_website, search_internet],
-            llm=self.gemini_llm,
+            llm=self.main_llm,
             verbose=True,
             allow_delegation=False
         )
 
         qualifier = Agent(
             config=agents_config['qualifier'],
-            llm=self.gemini_llm,
+            llm=self.main_llm,
             verbose=True,
             allow_delegation=False
         )
 
         sales_strategist = Agent(
             config=agents_config['sales_strategist'],
-            llm=self.gemini_llm,
+            llm=self.main_llm,
             verbose=True,
             allow_delegation=False
         )
