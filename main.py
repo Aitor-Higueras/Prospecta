@@ -1,11 +1,16 @@
+import sys
 import os
+
+# Asegurar que el directorio raíz de la aplicación esté en sys.path (crítico para Streamlit Cloud)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import glob
 import pandas as pd
 import streamlit as st
 from datetime import datetime
 from dotenv import load_dotenv
 
-from utils import (
+from app_utils import (
     AI_PROVIDERS,
     load_user_settings,
     save_user_settings,
