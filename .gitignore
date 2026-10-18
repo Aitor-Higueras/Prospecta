@@ -1,0 +1,20 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Variables y claves sensibles
+.env
+user_settings.json
+.streamlit/secrets.toml
+
+# Logs y temporales
+prospeccion_*.txt
+*.log
+.DS_Store
+Thumbs.db

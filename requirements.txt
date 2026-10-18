@@ -1,0 +1,11 @@
+crewai
+langchain-google-genai
+langchain-community
+litellm
+streamlit
+duckduckgo-search
+requests
+beautifulsoup4
+python-dotenv
+pyyaml
+pandas

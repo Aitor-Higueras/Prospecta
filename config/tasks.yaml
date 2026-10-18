@@ -1,0 +1,48 @@
+find_leads_task:
+  description: >
+    Utiliza tus herramientas de búsqueda para encontrar 3 empresas reales que pertenezcan
+    al nicho especificado: {niche}. No te detengas en la primera, queremos una pequeña lista.
+  expected_output: >
+    Un listado de 3 empresas con su nombre y dominio web.
+
+research_company_task:
+  description: >
+    Para cada empresa encontrada, utiliza el scraping y la búsqueda para identificar:
+    1. Dirección física exacta (calle, ciudad).
+    2. Teléfono de contacto.
+    3. Email (si no está en la web, búscalo en redes sociales o directorios).
+    4. 1 competidor directo de la zona.
+    5. Análisis de su negocio y puntos de dolor.
+  expected_output: >
+    Una ficha detallada por cada empresa que incluya: [Nombre, Dirección, Teléfono, Email, Competidor, Puntos de Dolor].
+
+qualify_lead_task:
+  description: >
+    Evalúa la lista de empresas investigadas. Descarta las que no encajen con: {value_proposition}.
+    Mantén solo las que tengan un problema real que podamos resolver.
+  expected_output: >
+    La lista de empresas filtrada, marcando cada una como CALIFICADO o DESCARTADO con su motivo.
+
+strategize_pitch_task:
+  description: >
+    Para cada lead CALIFICADO, diseña el ángulo de venta usando {value_proposition} y comparándolos
+    sutilmente con el competidor identificado para generar urgencia.
+  expected_output: >
+    Estrategia de ataque para cada lead.
+
+write_email_task:
+  description: >
+    Redacta un email hiper-personalizado para cada lead calificado. 
+    Usa el tono: {tone}.
+    Formato requerido para CADA LEAD:
+    ---
+    FICHA DEL LEAD:
+    - Empresa: [Nombre]
+    - Dirección: [Calle]
+    - Contacto: [Email / Teléfono]
+    ---
+    Email:
+    Asunto: [Creativo]
+    Cuerpo: [Contenido directo conectando con {value_proposition}]
+  expected_output: >
+    El documento final con todos los emails y sus fichas correspondientes.
