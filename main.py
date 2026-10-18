@@ -124,19 +124,34 @@ with tab_prospect:
     
     with col_niche:
         niche_input = st.text_input(
-            "¿Qué zona o nicho quieres prospectar?",
-            placeholder="Ej: Administradores de fincas en Madrid, Gestores de comunidades en Valencia...",
-            help="Define la actividad y la ciudad/distrito donde presta servicio tu empresa de limpieza."
+            "¿Qué zona o distrito de Madrid quieres prospectar?",
+            value=st.session_state.get("selected_niche_preset", "Administradores de fincas en Madrid"),
+            placeholder="Ej: Administradores de fincas en Chamberí, Gestores de comunidades en Pozuelo...",
+            help="Define la zona o distrito de Madrid donde tu empresa de limpieza presta servicio."
         )
         
-        st.caption("Sugerencias directas:")
-        sugg_cols = st.columns(3)
-        if sugg_cols[0].button("🏢 Administradores en Madrid"):
-            niche_input = "Administradores de fincas y comunidades en Madrid"
-        if sugg_cols[1].button("🏢 Gestores de Fincas en Barcelona"):
-            niche_input = "Administraciones de fincas y comunidades en Barcelona"
-        if sugg_cols[2].button("🏢 Administradores en Valencia"):
-            niche_input = "Administradores de fincas y comunidades en Valencia"
+        st.caption("📍 Zonas y distritos de Madrid:")
+        sugg_row1 = st.columns(3)
+        if sugg_row1[0].button("🏛️ Centro y Chamberí"):
+            st.session_state["selected_niche_preset"] = "Administradores de fincas en Madrid Centro y Chamberí"
+            st.rerun()
+        if sugg_row1[1].button("💎 Barrio Salamanca y Retiro"):
+            st.session_state["selected_niche_preset"] = "Administradores de fincas en Barrio de Salamanca y Retiro Madrid"
+            st.rerun()
+        if sugg_row1[2].button("🏢 Chamartín y Tetuán"):
+            st.session_state["selected_niche_preset"] = "Administraciones de fincas en Chamartín y Tetuán Madrid"
+            st.rerun()
+
+        sugg_row2 = st.columns(3)
+        if sugg_row2[0].button("🏡 Pozuelo y Majadahonda"):
+            st.session_state["selected_niche_preset"] = "Administradores de fincas y comunidades en Pozuelo y Majadahonda"
+            st.rerun()
+        if sugg_row2[1].button("🏙️ Vallecas y Arganzuela"):
+            st.session_state["selected_niche_preset"] = "Administraciones de fincas en Vallecas y Arganzuela Madrid"
+            st.rerun()
+        if sugg_row2[2].button("🌳 Alcobendas y Sanse"):
+            st.session_state["selected_niche_preset"] = "Administradores de fincas en Alcobendas y San Sebastián de los Reyes"
+            st.rerun()
 
     with col_opts:
         col_t1, col_t2 = st.columns([1, 1])
