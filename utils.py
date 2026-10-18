@@ -1,9 +1,11 @@
 import os
 import json
 import re
-from typing import Dict, Any, List
+from datetime import datetime
+from typing import Dict, Any, List, Tuple, Optional
 
 SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_settings.json")
+CONTACTED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "contacted_leads.json")
 
 # Lista completa de proveedores de IA compatibles vía CrewAI / LiteLLM
 AI_PROVIDERS = {
@@ -237,3 +239,67 @@ def leads_to_dataframe(leads: List[Dict[str, Any]]):
             "Cuerpo del Mensaje": lead.get("cuerpo", "")
         })
     return pd.DataFrame(rows)
+
+def load_contacted_leads() -> List[Dict[str, Any]]:
+    """Carga la lista histórica de empresas y emails ya contactados."""
+    if os.path.exists(CONTACTED_FILE):
+        try:
+            with open(CONTACTED_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return data
+        except Exception:
+            return []
+    return []
+
+def save_contacted_lead(empresa: str, email: str, asunto: str = "", nicho: str = "") -> bool:
+    """Registra de forma persistente un lead al que se le ha enviado un correo."""
+    try:
+        leads = load_contacted_leads()
+        new_entry = {
+            "empresa": empresa.strip(),
+            "email": email.strip().lower(),
+            "asunto": asunto.strip(),
+            "nicho": nicho.strip(),
+            "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        # Evitar duplicados en el registro
+        leads = [l for l in leads if not (l.get("email") == new_entry["email"] and l.get("empresa", "").lower() == new_entry["empresa"].lower())]
+        leads.insert(0, new_entry)
+        with open(CONTACTED_FILE, "w", encoding="utf-8") as f:
+            json.dump(leads, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"Error guardando contacted_lead: {e}")
+        return False
+
+def remove_contacted_lead(email: str, empresa: str) -> bool:
+    """Elimina una empresa de la lista de contactados para permitir volver a contactarla."""
+    try:
+        leads = load_contacted_leads()
+        leads = [l for l in leads if not (l.get("email") == email and l.get("empresa") == empresa)]
+        with open(CONTACTED_FILE, "w", encoding="utf-8") as f:
+            json.dump(leads, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception as e:
+        return False
+
+def is_lead_already_contacted(empresa: str, email: str, contacted_list: List[Dict[str, Any]]) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    """Comprueba si una empresa o email ya ha sido contactada previamente."""
+    clean_empresa = empresa.strip().lower() if empresa else ""
+    clean_email = email.strip().lower() if email else ""
+    
+    for c in contacted_list:
+        c_empresa = c.get("empresa", "").strip().lower()
+        c_email = c.get("email", "").strip().lower()
+        
+        # Coincidencia por email exacto
+        if clean_email and clean_email == c_email:
+            return True, c
+        
+        # Coincidencia por nombre de empresa (si tiene más de 3 letras)
+        if clean_empresa and len(clean_empresa) > 3 and c_empresa and len(c_empresa) > 3:
+            if clean_empresa == c_empresa or clean_empresa in c_empresa or c_empresa in clean_empresa:
+                return True, c
+                
+    return False, None

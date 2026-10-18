@@ -18,6 +18,7 @@ class SDRCrew:
         value_proposition: str,
         tone: str,
         leads_count: int = 3,
+        excluded_companies: list = None,
         ai_model: str = None,
         api_key: str = None,
         ai_base_url: str = None
@@ -26,6 +27,7 @@ class SDRCrew:
         self.value_proposition = value_proposition
         self.tone = tone
         self.leads_count = max(1, min(15, int(leads_count)))
+        self.excluded_companies = excluded_companies or []
 
         # Determinar modelo (por defecto Gemini 2.5 Flash)
         self.model = ai_model or os.environ.get("AI_MODEL", "gemini/gemini-2.5-flash")
@@ -153,11 +155,13 @@ class SDRCrew:
         )
 
         # Input injection al iniciar
+        excluded_str = ", ".join(self.excluded_companies[:30]) if self.excluded_companies else "Ninguna"
         result = crew.kickoff(inputs={
             'niche': self.niche,
             'value_proposition': self.value_proposition,
             'tone': self.tone,
-            'leads_count': str(self.leads_count)
+            'leads_count': str(self.leads_count),
+            'excluded_companies': excluded_str
         })
 
         # 5. Guardar resultado en un archivo persistente (Log de Prospección)

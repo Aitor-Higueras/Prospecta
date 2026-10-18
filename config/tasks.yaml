@@ -2,8 +2,9 @@ find_leads_task:
   description: >
     Utiliza tus herramientas de búsqueda para encontrar exactamente {leads_count} empresas reales y diferentes que pertenezcan
     al nicho especificado: {niche}. Asegúrate de extraer el nombre comercial y el dominio web oficial de cada una.
+    REGLA DE EXCLUSIÓN: NO investigues ni incluyas ninguna empresa que ya esté en esta lista de ya contactadas: {excluded_companies}.
   expected_output: >
-    Un listado de {leads_count} empresas con su nombre y dominio web.
+    Un listado de {leads_count} empresas nuevas con su nombre y dominio web.
 
 research_company_task:
   description: >

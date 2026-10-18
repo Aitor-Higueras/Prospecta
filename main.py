@@ -1,5 +1,6 @@
 import os
 import glob
+import pandas as pd
 import streamlit as st
 from datetime import datetime
 from dotenv import load_dotenv
@@ -10,7 +11,11 @@ from utils import (
     save_user_settings,
     parse_prospecting_output,
     extract_email_address,
-    leads_to_dataframe
+    leads_to_dataframe,
+    load_contacted_leads,
+    save_contacted_lead,
+    remove_contacted_lead,
+    is_lead_already_contacted
 )
 from tools.email_tool import (
     EMAIL_PROVIDERS,
@@ -29,13 +34,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Cargar configuraciones guardadas
+# Cargar configuraciones guardadas y lista de contactados
 saved_settings = load_user_settings()
 
-# Inicializar Session State si no existe
 if "settings" not in st.session_state:
     st.session_state.settings = saved_settings.copy()
-    # Si hay variables en el entorno (.env), usarlas como respaldo
     if not st.session_state.settings.get("ai_api_key"):
         if os.environ.get("GOOGLE_API_KEY"):
             st.session_state.settings["ai_api_key"] = os.environ.get("GOOGLE_API_KEY")
@@ -55,6 +58,8 @@ if "current_raw" not in st.session_state:
     st.session_state.current_raw = ""
 if "sent_logs" not in st.session_state:
     st.session_state.sent_logs = []
+if "contacted_leads" not in st.session_state:
+    st.session_state.contacted_leads = load_contacted_leads()
 
 active_ai_provider = st.session_state.settings.get("ai_provider", "Google Gemini (Recomendado / Gratis)")
 active_ai_model = st.session_state.settings.get("ai_model", "gemini/gemini-2.5-flash")
@@ -78,19 +83,24 @@ with st.sidebar:
     else:
         st.info("ℹ️ Correo no configurado (modo solo redacción)")
 
+    st.markdown("### 📇 Base de Datos")
+    num_contacted = len(st.session_state.contacted_leads)
+    st.metric("Empresas Contactadas", num_contacted)
+
     st.markdown("---")
-    st.markdown("💡 **Cero ataduras:** Puedes cambiar de proveedor de IA (Gemini, ChatGPT, DeepSeek, Claude, Groq...) en cualquier momento en la pestaña **⚙️ 3. Configuración**.")
+    st.markdown("💡 **Filtro Anti-Duplicados:** Las empresas a las que ya has enviado email se ignoran automáticamente en las nuevas búsquedas.")
 
 # --- TÍTULO PRINCIPAL ---
 st.title("🎯 Prospecta AI: Agentes de Prospección y Ventas")
 st.markdown("Encuentra clientes potenciales, investiga a sus competidores, redacta correos hiperpersonalizados y envíalos con un solo clic.")
 
 # PESTAÑAS PRINCIPALES
-tab_prospect, tab_leads, tab_config, tab_history = st.tabs([
+tab_prospect, tab_leads, tab_contacted, tab_config, tab_history = st.tabs([
     "🚀 1. Nueva Prospección",
     "📨 2. Leads y Envíos de Email",
-    "⚙️ 3. Configuración de Cuentas",
-    "📜 4. Historial Guardado"
+    "📇 3. Empresas Contactadas",
+    "⚙️ 4. Configuración de Cuentas",
+    "📜 5. Historial de Informes"
 ])
 
 # ==========================================
@@ -99,13 +109,16 @@ tab_prospect, tab_leads, tab_config, tab_history = st.tabs([
 with tab_prospect:
     st.subheader("Configura tu Campaña de Prospección")
     
-    # Cartel informativo del modelo activo
     if has_ai_key:
-        st.caption(f"🧠 Motor de IA activo: **{active_ai_provider}** | Modelo: `{active_ai_model}`")
+        st.caption(f"🧠 Motor de IA activo: **{active_ai_provider}**")
     else:
-        st.warning("⚠️ Recuerda añadir tu API Key en la pestaña '⚙️ 3. Configuración de Cuentas' antes de comenzar.")
+        st.warning("⚠️ Recuerda añadir tu API Key en la pestaña '⚙️ 4. Configuración de Cuentas' antes de comenzar.")
 
-    col_niche, col_tone = st.columns([2, 1])
+    # Alerta de empresas excluidas
+    if st.session_state.contacted_leads:
+        st.info(f"🛡️ **Filtro de Memoria Activo:** Hay **{len(st.session_state.contacted_leads)} empresas ya contactadas** registradas. Los agentes las ignorarán automáticamente para no duplicar contactos.")
+
+    col_niche, col_opts = st.columns([2, 1])
     
     with col_niche:
         niche_input = st.text_input(
@@ -114,7 +127,6 @@ with tab_prospect:
             help="Define la actividad comercial y la ubicación geográfica objetivo."
         )
         
-        # Atajos rápidos con ejemplos
         st.caption("Sugerencias de ejemplo:")
         sugg_cols = st.columns(3)
         if sugg_cols[0].button("🏋️ Gimnasios en Madrid"):
@@ -124,7 +136,7 @@ with tab_prospect:
         if sugg_cols[2].button("💻 Agencias Web en Barcelona"):
             niche_input = "Agencias de desarrollo web y marketing en Barcelona"
 
-    with col_tone:
+    with col_opts:
         col_t1, col_t2 = st.columns([1, 1])
         with col_t1:
             tone_options = (
@@ -160,17 +172,19 @@ with tab_prospect:
         base_url = st.session_state.settings.get("ai_base_url", "").strip()
 
         if not api_key and not ("ollama" in model_name):
-            st.error(f"❌ Necesitas configurar la API Key para {active_ai_provider}. Ve a la pestaña '⚙️ 3. Configuración de Cuentas' para introducirla.")
+            st.error(f"❌ Necesitas configurar la API Key para {active_ai_provider}. Ve a la pestaña '⚙️ 4. Configuración de Cuentas' para introducirla.")
         elif not niche_input or not value_prop:
             st.error("❌ Por favor completa el 'Nicho' y tu 'Propuesta de Valor' antes de iniciar.")
         else:
-            # Inyectar variables de entorno según el proveedor para máxima compatibilidad
             provider_data = AI_PROVIDERS.get(active_ai_provider, {})
             env_var = provider_data.get("env_var", "AI_API_KEY")
             if env_var:
                 os.environ[env_var] = api_key
 
-            st.info(f"🤖 **Tripulación activada con {active_ai_provider} ({model_name}).** Investigando {leads_count} prospectos...")
+            # Extraer lista de empresas excluidas
+            excluded = [c.get("empresa", "") for c in st.session_state.contacted_leads if c.get("empresa")]
+
+            st.info(f"🤖 **Tripulación activada con {active_ai_provider}.** Investigando {leads_count} prospectos nuevos (excluyendo {len(excluded)} ya contactadas)...")
             
             with st.spinner(f"Los agentes están buscando {leads_count} empresas, extrayendo datos web y redactando emails..."):
                 try:
@@ -181,6 +195,7 @@ with tab_prospect:
                         value_proposition=value_prop,
                         tone=tone,
                         leads_count=leads_count,
+                        excluded_companies=excluded,
                         ai_model=model_name,
                         api_key=api_key,
                         ai_base_url=base_url if base_url else None
@@ -189,9 +204,9 @@ with tab_prospect:
                     result = crew_system.run()
                     raw_text = getattr(result, "raw", str(result))
                     
-                    # Guardar en sesión
                     st.session_state.current_raw = raw_text
                     st.session_state.current_leads = parse_prospecting_output(raw_text)
+                    st.session_state.last_niche = niche_input
                     
                     st.success("✅ ¡Prospección completada con éxito! Ve a la pestaña '📨 2. Leads y Envíos de Email' para revisar y enviar los correos.")
                     st.balloons()
@@ -206,7 +221,7 @@ with tab_leads:
     st.subheader("Resultados Obtenidos y Gestión de Envíos")
 
     if not st.session_state.current_leads and not st.session_state.current_raw:
-        st.info("Aún no has ejecutado ninguna prospección en esta sesión. Completa los datos en la pestaña '🚀 1. Nueva Prospección' o abre un reporte desde '📜 4. Historial Guardado'.")
+        st.info("Aún no has ejecutado ninguna prospección en esta sesión. Completa los datos en la pestaña '🚀 1. Nueva Prospección' o abre un reporte desde '📜 5. Historial de Informes'.")
     else:
         leads = st.session_state.current_leads
         
@@ -232,11 +247,23 @@ with tab_leads:
         email_ready = bool(email_user and st.session_state.settings.get("email_password"))
 
         if not email_ready:
-            st.warning("⚠️ **Aviso:** No has configurado tu cuenta de correo en '⚙️ 3. Configuración'. Podrás ver y editar los emails generados, pero para enviarlos directamente debes conectar tu correo.")
+            st.warning("⚠️ **Aviso:** No has configurado tu cuenta de correo en '⚙️ 4. Configuración'. Podrás ver y editar los emails generados, pero para enviarlos directamente debes conectar tu correo.")
 
         for i, lead in enumerate(leads):
             empresa = lead.get("empresa", f"Prospecto #{i+1}")
-            with st.expander(f"🏢 {empresa}", expanded=True):
+            dest_email = lead.get("email_destinatario", "")
+            
+            # Comprobar si ya fue contactado previamente
+            already_sent, sent_info = is_lead_already_contacted(empresa, dest_email, st.session_state.contacted_leads)
+            
+            card_title = f"🏢 {empresa}"
+            if already_sent:
+                card_title += " [⚠️ YA CONTACTADO]"
+
+            with st.expander(card_title, expanded=True):
+                if already_sent:
+                    st.warning(f"⚠️ **ATENCIÓN: Esta empresa ya fue contactada** el **{sent_info.get('fecha', 'N/D')}** a la dirección `{sent_info.get('email', 'N/D')}`.")
+
                 col_info, col_action = st.columns([3, 2])
 
                 with col_info:
@@ -248,7 +275,7 @@ with tab_leads:
 
                 recipient_email = st.text_input(
                     f"Email destinatario ({empresa})",
-                    value=lead.get("email_destinatario", ""),
+                    value=dest_email,
                     key=f"recip_{i}",
                     placeholder="ejemplo@empresa.com"
                 )
@@ -268,7 +295,8 @@ with tab_leads:
 
                 col_btn, col_msg = st.columns([1, 2])
                 with col_btn:
-                    send_btn = st.button(f"📨 Enviar este Email", key=f"send_btn_{i}", type="primary", disabled=not email_ready)
+                    btn_label = "⚠️ Reenviar Email" if already_sent else "📨 Enviar este Email"
+                    send_btn = st.button(btn_label, key=f"send_btn_{i}", type="primary", disabled=not email_ready)
 
                 with col_msg:
                     if send_btn:
@@ -294,6 +322,15 @@ with tab_leads:
                                 )
                                 if success:
                                     st.success(f"✅ {msg}")
+                                    # Registrar en la base de datos de contactados permanente
+                                    current_niche = getattr(st.session_state, "last_niche", "General")
+                                    save_contacted_lead(
+                                        empresa=empresa,
+                                        email=recipient_email,
+                                        asunto=email_subject,
+                                        nicho=current_niche
+                                    )
+                                    st.session_state.contacted_leads = load_contacted_leads()
                                     st.session_state.sent_logs.append({
                                         "empresa": empresa,
                                         "email": recipient_email,
@@ -314,7 +351,52 @@ with tab_leads:
             )
 
 # ==========================================
-# TAB 3: CONFIGURACIÓN DE CUENTAS
+# TAB 3: EMPRESAS CONTACTADAS (CRM / MEMORIA)
+# ==========================================
+with tab_contacted:
+    st.subheader("📇 Registro de Empresas Contactadas")
+    st.markdown("Esta lista almacena el histórico de empresas a las que ya se ha enviado un correo. **Los agentes excluyen automáticamente estas empresas en las nuevas búsquedas para no duplicar contactos.**")
+
+    contacted = st.session_state.contacted_leads
+
+    if not contacted:
+        st.info("Aún no has enviado ningún correo. En cuanto envíes el primero desde la pestaña '📨 2. Leads y Envíos', aparecerá aquí registrado.")
+    else:
+        df_contacted = pd.DataFrame(contacted)
+        csv_contacted = df_contacted.to_csv(index=False, sep=";", encoding="utf-8-sig")
+
+        col_c1, col_c2 = st.columns([2, 1])
+        with col_c1:
+            st.write(f"Total de empresas contactadas: **{len(contacted)}**")
+        with col_c2:
+            st.download_button(
+                label="📊 Descargar Historial en Excel (.csv)",
+                data=csv_contacted,
+                file_name=f"contactados_historico_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                type="secondary",
+                use_container_width=True
+            )
+
+        # Mostrar tabla interactiva
+        st.dataframe(df_contacted, use_container_width=True)
+
+        st.markdown("---")
+        with st.expander("🗑️ Desbloquear una empresa (Permitir volver a contactarla)"):
+            st.caption("Si eliminas una empresa de esta lista, los agentes podrán volver a encontrarla e investigarla.")
+            del_options = [f"{c.get('empresa')} ({c.get('email')})" for c in contacted]
+            selected_del = st.selectbox("Selecciona la empresa a desbloquear:", del_options)
+            
+            if st.button("Eliminar del registro de contactados", type="secondary"):
+                idx = del_options.index(selected_del)
+                target = contacted[idx]
+                if remove_contacted_lead(target.get("email"), target.get("empresa")):
+                    st.session_state.contacted_leads = load_contacted_leads()
+                    st.success(f"✅ Empresa {target.get('empresa')} desbloqueada.")
+                    st.rerun()
+
+# ==========================================
+# TAB 4: CONFIGURACIÓN DE CUENTAS
 # ==========================================
 with tab_config:
     st.subheader("⚙️ Configuración Personalizada (IA y Correo)")
@@ -338,7 +420,6 @@ with tab_config:
         prov_info = AI_PROVIDERS[selected_ai_provider]
         recommended_model = prov_info.get("default_model", "")
         
-        # Entrada de API Key
         cfg_ai_api_key = st.text_input(
             f"Introduce tu clave (API Key):",
             value=st.session_state.settings.get("ai_api_key", ""),
@@ -346,12 +427,10 @@ with tab_config:
             help=f"Clave provista por {selected_ai_provider.split('(')[0].strip()}."
         )
 
-        # Enlace rápido y nota amigable
         if prov_info.get("key_url"):
             st.markdown(f"👉 **[Haz clic aquí para obtener tu clave en {selected_ai_provider.split('(')[0].strip()}]({prov_info['key_url']})**")
         st.caption(f"ℹ️ {prov_info['note']}")
 
-        # Opciones avanzadas ocultas para no abrumar al usuario
         with st.expander("⚙️ Opciones avanzadas de modelo (Opcional)"):
             cfg_model = st.text_input(
                 "Modelo seleccionado automáticamente:",
@@ -433,7 +512,6 @@ with tab_config:
             cfg_smtp_port = mail_info["port"]
             cfg_smtp_tls = mail_info["use_tls"]
 
-        # Botón para probar la conexión
         if st.button("🔌 Probar Conexión de Correo"):
             if not cfg_email_user or not cfg_email_pass:
                 st.error("Introduce tu correo y contraseña antes de probar.")
@@ -478,10 +556,10 @@ with tab_config:
             st.warning("Ajustes aplicados en la sesión actual.")
 
 # ==========================================
-# TAB 4: HISTORIAL GUARDADO
+# TAB 5: HISTORIAL GUARDADO
 # ==========================================
 with tab_history:
-    st.subheader("📜 Historial de Prospecciones Realizadas")
+    st.subheader("📜 Historial de Informes de Prospección")
     st.markdown("Accede a las prospecciones guardadas en cualquier momento para volver a revisar datos o enviar correos pendientes.")
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -532,4 +610,4 @@ if st.session_state.sent_logs:
         st.write(f"• **{log['empresa']}** ({log['email']}) — Enviado a las {log['fecha']}")
 
 st.markdown("---")
-st.caption("Prospecta AI Multi-IA | Compatible con Google Gemini, OpenAI, Claude, DeepSeek, Groq y Mistral")
+st.caption("Prospecta AI Multi-IA | Compatible con Google Gemini, OpenAI, Claude, DeepSeek, Groq y Mistral | Memoria Anti-Duplicados")
