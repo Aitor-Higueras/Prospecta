@@ -15,7 +15,9 @@ from utils import (
     load_contacted_leads,
     save_contacted_lead,
     remove_contacted_lead,
-    is_lead_already_contacted
+    is_lead_already_contacted,
+    get_maps_search_url,
+    get_google_search_url
 )
 from tools.email_tool import (
     EMAIL_PROVIDERS,
@@ -122,19 +124,19 @@ with tab_prospect:
     
     with col_niche:
         niche_input = st.text_input(
-            "¿Qué nicho o sector quieres prospectar?",
-            placeholder="Ej: Centros de fisioterapia en Valencia, Agencias de diseño en Barcelona...",
-            help="Define la actividad comercial y la ubicación geográfica objetivo."
+            "¿Qué zona o nicho quieres prospectar?",
+            placeholder="Ej: Administradores de fincas en Madrid, Gestores de comunidades en Valencia...",
+            help="Define la actividad y la ciudad/distrito donde presta servicio tu empresa de limpieza."
         )
         
-        st.caption("Sugerencias de ejemplo:")
+        st.caption("Sugerencias directas:")
         sugg_cols = st.columns(3)
-        if sugg_cols[0].button("🏋️ Gimnasios en Madrid"):
-            niche_input = "Gimnasios y centros de fitness en Madrid"
-        if sugg_cols[1].button("🦷 Clínicas Dentales en Sevilla"):
-            niche_input = "Clínicas dentales privadas en Sevilla"
-        if sugg_cols[2].button("💻 Agencias Web en Barcelona"):
-            niche_input = "Agencias de desarrollo web y marketing en Barcelona"
+        if sugg_cols[0].button("🏢 Administradores en Madrid"):
+            niche_input = "Administradores de fincas y comunidades en Madrid"
+        if sugg_cols[1].button("🏢 Gestores de Fincas en Barcelona"):
+            niche_input = "Administraciones de fincas y comunidades en Barcelona"
+        if sugg_cols[2].button("🏢 Administradores en Valencia"):
+            niche_input = "Administradores de fincas y comunidades en Valencia"
 
     with col_opts:
         col_t1, col_t2 = st.columns([1, 1])
@@ -269,9 +271,17 @@ with tab_leads:
                 with col_info:
                     st.markdown(f"**Empresa:** {lead.get('empresa', 'N/D')}")
                     if lead.get("contacto"):
-                        st.markdown(f"**Contacto detectado:** {lead.get('contacto')}")
+                        st.markdown(f"**Contacto / Teléfono:** {lead.get('contacto')}")
                     if lead.get("direccion"):
                         st.markdown(f"**Dirección:** {lead.get('direccion')}")
+
+                with col_action:
+                    st.markdown("**Acciones Rápidas:**")
+                    maps_url = get_maps_search_url(empresa, lead.get("direccion", ""))
+                    search_url = get_google_search_url(empresa)
+                    col_a1, col_a2 = st.columns(2)
+                    col_a1.link_button("📍 Ver en Maps", maps_url, use_container_width=True)
+                    col_a2.link_button("🔍 Ver en Google", search_url, use_container_width=True)
 
                 recipient_email = st.text_input(
                     f"Email destinatario ({empresa})",
@@ -282,13 +292,34 @@ with tab_leads:
 
                 email_subject = st.text_input(
                     f"Asunto del Email ({empresa})",
-                    value=lead.get("asunto", "Propuesta de colaboración"),
+                    value=st.session_state.get(f"subj_{i}", lead.get("asunto", "Propuesta de colaboración")),
                     key=f"subj_{i}"
                 )
 
+                # Alternar entre plantilla inicial y plantilla de seguimiento
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
+                    if st.button("📄 Versión 1: Apertura (Presupuesto 24h)", key=f"v1_{i}"):
+                        st.session_state[f"body_{i}"] = lead.get("cuerpo", "")
+                        st.session_state[f"subj_{i}"] = lead.get("asunto", f"Presupuesto limpieza para {empresa}")
+                        st.rerun()
+                with col_f2:
+                    if st.button("🔁 Versión 2: Seguimiento (¿Problemas / Bajas?)", key=f"v2_{i}"):
+                        st.session_state[f"body_{i}"] = (
+                            f"Hola,\n\n"
+                            f"Te escribo brevemente por si en alguna de las comunidades que gestionáis en {empresa} "
+                            f"estáis teniendo quejas de vecinos por la limpieza o problemas con personal de baja sin cubrir.\n\n"
+                            f"Podemos prepararos un presupuesto comparativo en 24 horas sin compromiso para la próxima junta de propietarios, "
+                            f"con suplencias de personal garantizadas en menos de 2 horas.\n\n"
+                            f"¿Te encajaría que os pasemos una propuesta para alguna finca?\n\n"
+                            f"Un saludo cordial,"
+                        )
+                        st.session_state[f"subj_{i}"] = f"Seguimiento: Limpieza de comunidades para {empresa}"
+                        st.rerun()
+
                 email_body = st.text_area(
                     f"Cuerpo del mensaje ({empresa})",
-                    value=lead.get("cuerpo", ""),
+                    value=st.session_state.get(f"body_{i}", lead.get("cuerpo", "")),
                     height=220,
                     key=f"body_{i}"
                 )

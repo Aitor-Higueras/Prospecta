@@ -4,6 +4,8 @@ import re
 from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional
 
+from urllib.parse import quote_plus
+
 SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user_settings.json")
 CONTACTED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "contacted_leads.json")
 
@@ -114,7 +116,7 @@ DEFAULT_SETTINGS = {
     "smtp_port": 587,
     "smtp_tls": True,
     # Textos
-    "default_value_prop": "Automatizamos procesos y prospección comercial con Inteligencia Artificial.",
+    "default_value_prop": "Servicio profesional de limpieza y mantenimiento para comunidades de propietarios y garajes. Garantizamos sustitución inmediata en menos de 2h ante bajas, supervisión periódica con fotos y presupuestos cerrados en 24h para tus juntas de vecinos.",
     "default_tone": "Directo hacia el ROI y Profesional"
 }
 
@@ -303,3 +305,12 @@ def is_lead_already_contacted(empresa: str, email: str, contacted_list: List[Dic
                 return True, c
                 
     return False, None
+
+def get_maps_search_url(empresa: str, direccion: str = "") -> str:
+    """Genera la URL para buscar la empresa o su oficina en Google Maps."""
+    query = f"{empresa} {direccion}".strip()
+    return f"https://www.google.com/maps/search/?api=1&query={quote_plus(query)}"
+
+def get_google_search_url(empresa: str) -> str:
+    """Genera una búsqueda en Google orientada a encontrar al Administrador de Fincas colegiado o LinkedIn."""
+    return f"https://www.google.com/search?q={quote_plus('Administrador de fincas ' + empresa)}"
