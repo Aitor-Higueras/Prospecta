@@ -66,11 +66,11 @@ with st.sidebar:
     st.title("Prospecta AI")
     st.caption("Plataforma Multi-Proveedor B2B y Envíos de Email")
     
-    st.markdown("### 🚦 Estado del Cerebro")
+    st.markdown("### 🚦 Estado del Sistema")
     if has_ai_key:
-        st.success(f"✅ **IA Conectada:**\n{active_ai_provider.split('(')[0].strip()}\n`{active_ai_model}`")
+        st.success(f"✅ **IA Conectada:** {active_ai_provider.split('(')[0].strip()}")
     else:
-        st.warning("⚠️ **Falta configurar la API Key de IA** (ve a la pestaña ⚙️ Configuración)")
+        st.warning("⚠️ **Falta la clave de IA** (ve a ⚙️ Configuración)")
 
     if has_email:
         st.success(f"✅ **Correo Conectado:**\n`{st.session_state.settings.get('email_user')}`")
@@ -300,42 +300,37 @@ with tab_config:
         ai_prov_index = provider_list.index(saved_ai_prov) if saved_ai_prov in provider_list else 0
         
         selected_ai_provider = st.selectbox(
-            "Elige tu Proveedor de IA:",
+            "Proveedor de Inteligencia Artificial:",
             provider_list,
             index=ai_prov_index
         )
         
         prov_info = AI_PROVIDERS[selected_ai_provider]
-        st.caption(f"ℹ️ {prov_info['note']}")
-
-        # Selector de modelo
-        available_models = prov_info.get("models", [])
-        saved_model = st.session_state.settings.get("ai_model", prov_info.get("default_model", ""))
+        recommended_model = prov_info.get("default_model", "")
         
-        if available_models:
-            model_idx = available_models.index(saved_model) if saved_model in available_models else 0
-            cfg_model = st.selectbox("Modelo a utilizar:", available_models, index=model_idx)
-        else:
-            cfg_model = st.text_input("Identificador de Modelo LiteLLM:", value=saved_model)
-
         # Entrada de API Key
         cfg_ai_api_key = st.text_input(
-            f"API Key para {selected_ai_provider}:",
+            f"Introduce tu clave (API Key):",
             value=st.session_state.settings.get("ai_api_key", ""),
             type="password",
-            help=f"Clave de acceso provista por {selected_ai_provider}."
+            help=f"Clave provista por {selected_ai_provider.split('(')[0].strip()}."
         )
 
-        # Enlace para conseguir la clave si está disponible
+        # Enlace rápido y nota amigable
         if prov_info.get("key_url"):
-            st.markdown(f"🔗 [Haz clic aquí para conseguir tu clave de **{selected_ai_provider.split('(')[0]}**]({prov_info['key_url']})")
+            st.markdown(f"👉 **[Haz clic aquí para obtener tu clave en {selected_ai_provider.split('(')[0].strip()}]({prov_info['key_url']})**")
+        st.caption(f"ℹ️ {prov_info['note']}")
 
-        # Campo opcional para servidor local o custom URL
-        cfg_base_url = ""
-        if "Personalizado" in selected_ai_provider or "ollama" in cfg_model.lower():
+        # Opciones avanzadas ocultas para no abrumar al usuario
+        with st.expander("⚙️ Opciones avanzadas de modelo (Opcional)"):
+            cfg_model = st.text_input(
+                "Modelo seleccionado automáticamente:",
+                value=st.session_state.settings.get("ai_model", recommended_model),
+                help="El sistema ya ha elegido el mejor modelo por ti. No necesitas cambiarlo."
+            )
             cfg_base_url = st.text_input(
-                "Base URL (Opcional para Ollama o proxies):",
-                value=st.session_state.settings.get("ai_base_url", "http://localhost:11434"),
+                "Base URL (solo para servidores locales / Ollama):",
+                value=st.session_state.settings.get("ai_base_url", ""),
                 placeholder="http://localhost:11434"
             )
 
